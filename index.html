@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sindicato de Datos — SENA CBI Palmira</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <style>
+        :root {
+            --bg:       #070d1a;
+            --surface:  #0d1b2e;
+            --panel:    #111f35;
+            --border:   #1a3050;
+            --orange:   #f97316;
+            --orange2:  #fb923c;
+            --green:    #22c55e;
+            --red:      #ef4444;
+            --yellow:   #facc15;
+            --blue:     #38bdf8;
+            --text:     #e2e8f0;
+            --muted:    #64748b;
+            --mono:     'Share Tech Mono', monospace;
+            --sans:     'Exo 2', sans-serif;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ──── SCANLINES ──── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; z-index: 999; pointer-events: none;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0,0,0,0.04) 0px,
+                rgba(0,0,0,0.04) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+        }
+
+        /* ──── GRID BACKGROUND ──── */
+        body::after {
+            content: '';
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(249,115,22,.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(249,115,22,.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .wrap { position: relative; z-index: 1; max-width: 1140px; margin: 0 auto; padding: 20px 16px 60px; }
+
+        /* ──── HEADER ──── */
+        header {
+            text-align: center;
+            padding: 28px 0 22px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 30px;
+            position: relative;
+        }
+        header .eyebrow {
+            font-family: var(--mono);
+            font-size: .72rem;
+            letter-spacing: .18em;
+            color: var(--orange);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        header h1 {
+            font-size: clamp(1.4rem, 4vw, 2.3rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #fff;
+            line-height: 1.1;
+        }
+        header h1 span { color: var(--orange); }
+        header .sub {
+            font-family: var(--mono);
+            font-size: .78rem;
+            color: var(--muted);
+            margin-top: 6px;
+            letter-spacing: .1em;
+        }
+
+        .reset-btn {
+            position: absolute; right: 0; top: 28px;
+            background: var(--red); color: #fff; border: none;
+            padding: 7px 13px; border-radius: 4px; cursor: pointer;
+            font-family: var(--mono); font-size: .75rem; font-weight: bold;
+            display: none;
+            transition: background .2s;
+        }
+        .reset-btn:hover { background: #c0392b; }
+
+        /* ──── SCREENS ──── */
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* ──── AUTH CARD ──── */
+        .auth-card {
+            max-width: 460px; margin: 60px auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-top: 3px solid var(--orange);
+            border-radius: 10px;
+            padding: 38px 36px;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0,0,0,.6);
+        }
+        .auth-card h2 {
+            font-size: 1.1rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: .08em;
+            color: var(--orange); margin-bottom: 6px;
+        }
+        .auth-card p { font-size: .88rem; color: var(--muted); margin-bottom: 26px; }
+
+        .role-btn {
+            display: block; width: 100%; padding: 15px 20px;
+            margin: 12px 0; font-size: 1rem; font-weight: 800;
+            font-family: var(--sans); letter-spacing: .05em;
+            text-transform: uppercase; color: #fff; border: none;
+            border-radius: 6px; cursor: pointer;
+            transition: transform .15s, box-shadow .15s;
+            position: relative; overflow: hidden;
+        }
+        .role-btn::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(255,255,255,.07); opacity: 0; transition: opacity .2s;
+        }
+        .role-btn:hover::after { opacity: 1; }
+        .role-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+
+        .btn-player  { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
+        .btn-creator { background: linear-gradient(135deg, #c2410c, #ea580c); }
+
+        #auth-error { color: var(--red); font-size: .88rem; margin-top: 10px; font-weight: 600; }
+
+        /* ──── GAME LAYOUT ──── */
+        .game-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.25fr;
+            gap: 22px;
+        }
+        @media (max-width: 720px) {
+            .game-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ──── CARD ──── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 22px 20px;
+            margin-bottom: 18px;
+        }
+        .card:last-child { margin-bottom: 0; }
+        .card h2 {
+            font-size: .85rem; font-weight: 800; text-transform: uppercase;
+            letter-spacing: .1em; color: var(--orange);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px; margin-bottom: 16px;
+        }
+
+        /* ──── PLAYER ID ──── */
+        .player-id {
+            font-family: var(--mono); font-size: 1.3rem; font-weight: bold;
+            color: var(--blue); background: var(--panel);
+            border: 1px solid var(--border); border-radius: 5px;
+            text-align: center; padding: 10px; margin-bottom: 14px;
+            letter-spacing: .05em;
+        }
+        .round-badge {
+            display: inline-block; font-family: var(--mono);
+            font-size: .75rem; letter-spacing: .1em;
+            background: var(--panel); border: 1px solid var(--border);
+            color: var(--muted); padding: 4px 10px; border-radius: 3px;
+            margin-bottom: 12px;
+        }
+
+        /* ──── DECISION BUTTONS ──── */
+        .decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .decision-btn {
+            padding: 18px 10px; font-size: 1rem; font-weight: 800;
+            font-family: var(--sans); border-radius: 7px; cursor: pointer;
+            border: 2px solid transparent; transition: all .2s;
+            letter-spacing: .03em;
+        }
+        .decision-btn small { display: block; font-size: .72rem; font-weight: 400; margin-top: 3px; opacity: .8; }
+
+        .btn-coop {
+            background: rgba(34,197,94,.1); color: var(--green); border-color: var(--green);
+        }
+        .btn-coop:hover { background: rgba(34,197,94,.2); }
+        .btn-coop.chosen { background: var(--green); color: #000; }
+
+        .btn-betray {
+            background: rgba(239,68,68,.1); color: var(--red); border-color: var(--red);
+        }
+        .btn-betray:hover { background: rgba(239,68,68,.2); }
+        .btn-betray.chosen { background: var(--red); color: #fff; }
+
+        #vote-status {
+            margin-top: 14px; text-align: center; font-size: .88rem;
+            font-weight: 700; font-family: var(--mono); color: var(--yellow);
+        }
+
+        /* ──── CREATOR PANEL ──── */
+        .vote-monitor {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 6px; padding: 14px 16px; text-align: center;
+            margin: 14px 0;
+        }
+        .vote-monitor .label { font-family: var(--mono); font-size: .72rem; color: var(--muted); letter-spacing: .08em; }
+        .vote-monitor .ready { font-size: 1.25rem; font-weight: 800; color: var(--blue); margin-top: 4px; }
+        .vote-monitor .pending { font-size: 1rem; font-weight: 700; color: var(--yellow); margin-top: 2px; }
+
+        .admin-btn {
+            width: 100%; background: var(--orange); color: #fff;
+            border: none; padding: 14px; font-size: .95rem; font-weight: 800;
+            font-family: var(--sans); letter-spacing: .05em; text-transform: uppercase;
+            border-radius: 6px; cursor: pointer; margin-top: 12px;
+            transition: background .2s, transform .15s;
+        }
+        .admin-btn:hover { background: var(--orange2); transform: translateY(-1px); }
+        .admin-btn:disabled { background: var(--border); color: var(--muted); cursor: default; transform: none; }
+
+        /* ──── METRICS BAR ──── */
+        .metrics-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+        .metric {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 6px; padding: 12px 8px; text-align: center;
+        }
+        .metric .mlabel { font-family: var(--mono); font-size: .68rem; color: var(--muted); letter-spacing: .07em; margin-bottom: 4px; }
+        .metric .mval { font-family: var(--mono); font-size: 1.25rem; font-weight: bold; color: var(--orange); }
+
+        /* ──── LEADERBOARD ──── */
+        .table-wrap { max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        th {
+            position: sticky; top: 0; z-index: 2;
+            background: var(--panel); color: var(--muted);
+            font-family: var(--mono); font-size: .7rem; letter-spacing: .08em;
+            text-transform: uppercase; padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        tbody tr:hover { background: rgba(255,255,255,.02); }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .pos { font-family: var(--mono); font-weight: bold; color: var(--muted); font-size: .85rem; }
+        .pos.top1 { color: #fbbf24; }
+        .pos.top2 { color: #94a3b8; }
+        .pos.top3 { color: #cd7c4a; }
+        .code-id { font-family: var(--mono); font-weight: bold; }
+        .my-row td { background: rgba(56,189,248,.06); }
+        .badge-coop { color: var(--green); font-weight: 700; }
+        .badge-betray { color: var(--red); font-weight: 700; }
+        .score-cell { font-family: var(--mono); font-weight: bold; font-size: 1rem; }
+
+        /* ──── EMPTY STATE ──── */
+        .empty-state {
+            text-align: center; padding: 40px 20px;
+            color: var(--muted); font-family: var(--mono); font-size: .82rem;
+        }
+
+        /* ──── SCROLLBAR ──── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--panel); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+
+    <header>
+        <button id="admin-reset-button" class="reset-btn" onclick="resetWholeServer()">⟳ Reiniciar Todo</button>
+        <div class="eyebrow">SENA CBI Palmira — Simulación Grupal</div>
+        <h1>Sindicato de <span>Datos</span><br>El Dilema del Servidor</h1>
+        <div class="sub">Instructor: David Marques Herrera</div>
+    </header>
+
+    <!-- ════════════════════  AUTH  ════════════════════ -->
+    <div id="screen-auth" class="screen active">
+        <div class="auth-card">
+            <h2>Selecciona tu Rol</h2>
+            <p>Conexión P2P en tiempo real — comparte el link por WhatsApp y todos juegan desde el mismo archivo.</p>
+            <button class="role-btn btn-player"  onclick="chooseRole('player')">💻 Ingresar como Jugador</button>
+            <button class="role-btn btn-creator" onclick="chooseRole('creator')">🛠️ Ingresar como Creador (Admin)</button>
+            <div id="auth-error"></div>
+        </div>
+    </div>
+
+    <!-- ════════════════════  GAME  ════════════════════ -->
+    <div id="screen-game" class="screen">
+        <div class="game-grid">
+
+            <!-- Columna izquierda -->
+            <div>
+
+                <!-- Panel Jugador -->
+                <div id="panel-player" class="card" style="display:none">
+                    <h2>Panel de Decisiones Tácticas</h2>
+                    <div id="my-id-badge" class="player-id">Asignando código…</div>
+                    <span class="round-badge" id="player-round-badge">Ronda 1 / 4</span>
+                    <p style="font-size:.85rem; color:var(--muted); line-height:1.5;">
+                        Elige tu acción para esta ronda. Tu voto se refleja en tiempo real en la consola del Creador.
+                    </p>
+                    <div class="decision-grid">
+                        <button id="btn-choice-coop"   class="decision-btn btn-coop"   onclick="submitDecision('Cooperar')">
+                            🟢 INVERTIR<small>Cooperar</small>
+                        </button>
+                        <button id="btn-choice-betray" class="decision-btn btn-betray" onclick="submitDecision('Traicionar')">
+                            🔴 HACKEAR<small>Traicionar</small>
+                        </button>
+                    </div>
+                    <div id="vote-status">⚠ No has votado en esta ronda aún.</div>
+                </div>
+
+                <!-- Panel Creador -->
+                <div id="panel-creator" class="card" style="display:none">
+                    <h2>Consola Central del Creador</h2>
+                    <span class="round-badge" id="creator-round-badge">Control de Ronda 1 / 4</span>
+                    <p style="font-size:.85rem; color:var(--muted); line-height:1.5;">
+                        Monitorea los votos en tiempo real y procesa la ronda cuando estés listo.
+                    </p>
+                    <div class="vote-monitor">
+                        <div class="label">Monitoreo de Respuestas</div>
+                        <div id="vote-counter"  class="ready">Votos listos: 0 / 0</div>
+                        <div id="vote-pending"  class="pending">Faltan: 0 personas</div>
+                    </div>
+                    <button class="admin-btn" id="proc-btn" onclick="nextRoundMaster()">
+                        ⚡ Procesar Ronda e Ir a la Siguiente
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Columna derecha -->
+            <div class="card">
+                <h2>Dashboard de Resultados en Vivo</h2>
+
+                <div class="metrics-bar">
+                    <div class="metric">
+                        <div class="mlabel">Cooperación</div>
+                        <div id="coop-rate" class="mval">—</div>
+                    </div>
+                    <div class="metric">
+                        <div class="mlabel">Estado</div>
+                        <div id="server-status" class="mval" style="color:var(--muted); font-size:.95rem;">ESPERANDO</div>
+                    </div>
+                    <div class="metric">
+                        <div class="mlabel">Pts Totales</div>
+                        <div id="total-pool" class="mval">0</div>
+                    </div>
+                </div>
+
+                <h3 style="font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-bottom:10px;">
+                    Tabla de Clasificación Oficial
+                </h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Código</th>
+                                <th>Última Acción</th>
+                                <th>Puntaje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  GunDB — Base de datos P2P sin servidor propio
+//  Usa dos relays públicos estables como respaldo
+// ═══════════════════════════════════════════════════════════════
+const gun = Gun([
+    'https://gun-manhattan.herokuapp.com/gun',
+    'https://gundb-relay.onrender.com/gun'
+]);
+const ROOM = gun.get('sena_sindicato_v4_palmira');
+
+// ─── Estado local ───
+let userRole          = '';
+let myAssignedId      = '';
+let currentLocalRound = 1;
+let hasVotedThisRound = false;
+let globalState = {
+    players: {},
+    config:  { round: 1, coopRate: '—', serverState: 'ESPERANDO' }
+};
+
+// ─── Listener en tiempo real ───
+ROOM.on(data => {
+    if (!data) return;
+    globalState.players = {};
+    Object.keys(data).forEach(key => {
+        if (key.startsWith('Prog_')) {
+            try { globalState.players[key] = JSON.parse(data[key]); } catch(e){}
+        }
+        if (key === 'SERVER_CONFIG') {
+            try { globalState.config = JSON.parse(data[key]); } catch(e){}
+        }
+    });
+    syncUI();
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SELECCIÓN DE ROL
+// ═══════════════════════════════════════════════════════════════
+function chooseRole(role) {
+    if (role === 'creator') {
+        const pw = prompt('Ingresa la contraseña de Creador:');
+        if (pw !== '1455') {
+            document.getElementById('auth-error').innerText = '🔒 Contraseña incorrecta.';
+            return;
+        }
+        document.getElementById('admin-reset-button').style.display = 'block';
+    }
+
+    userRole = role;
+    document.getElementById('screen-auth').classList.remove('active');
+    document.getElementById('screen-game').classList.add('active');
+
+    if (role === 'player')  {
+        document.getElementById('panel-player').style.display  = 'block';
+        assignPlayerNumber();
+    } else {
+        document.getElementById('panel-creator').style.display = 'block';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ASIGNACIÓN AUTOMÁTICA DE NÚMERO (1-27)
+// ═══════════════════════════════════════════════════════════════
+function assignPlayerNumber() {
+    // Espera 800ms para que el listener llene globalState.players
+    setTimeout(() => {
+        const taken = Object.keys(globalState.players).length;
+        const next  = taken + 1;
+
+        if (next > 27) {
+            alert('❌ Los 27 cupos ya están ocupados. Comunícate con tu instructor.');
+            location.reload();
+            return;
+        }
+
+        myAssignedId = `Prog_${String(next).padStart(2,'0')}`;
+        document.getElementById('my-id-badge').innerText = `Tu código: ${myAssignedId}`;
+
+        const data = { score: 100, lastAction: '-', currentVote: 'Ninguno', votedRound: 0 };
+        ROOM.get(myAssignedId).put(JSON.stringify(data));
+    }, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ENVIAR VOTO
+// ═══════════════════════════════════════════════════════════════
+function submitDecision(type) {
+    if (!myAssignedId) { alert('Espera, se está asignando tu código…'); return; }
+    if (hasVotedThisRound) { alert('Ya votaste esta ronda. Espera al Creador.'); return; }
+
+    const prev = globalState.players[myAssignedId] || {};
+    const data = {
+        score:       prev.score      ?? 100,
+        lastAction:  prev.lastAction ?? '-',
+        currentVote: type,
+        votedRound:  currentLocalRound
+    };
+    ROOM.get(myAssignedId).put(JSON.stringify(data));
+    hasVotedThisRound = true;
+
+    const btnC = document.getElementById('btn-choice-coop');
+    const btnB = document.getElementById('btn-choice-betray');
+    const vs   = document.getElementById('vote-status');
+
+    if (type === 'Cooperar') {
+        btnC.classList.add('chosen'); btnB.classList.remove('chosen');
+        vs.innerText = '✓ Enviaste: INVERTIR 🟢';
+        vs.style.color = 'var(--green)';
+    } else {
+        btnB.classList.add('chosen'); btnC.classList.remove('chosen');
+        vs.innerText = '✓ Enviaste: HACKEAR 🔴';
+        vs.style.color = 'var(--red)';
+    }
+}
+
+function resetPlayerUI() {
+    hasVotedThisRound = false;
+    document.getElementById('btn-choice-coop').classList.remove('chosen');
+    document.getElementById('btn-choice-betray').classList.remove('chosen');
+    const vs = document.getElementById('vote-status');
+    vs.innerText = '⚠ No has votado en esta ronda aún.';
+    vs.style.color = 'var(--yellow)';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SYNC DE UI
+// ═══════════════════════════════════════════════════════════════
+function syncUI() {
+    const { players, config } = globalState;
+    const ids = Object.keys(players);
+
+    // Cambio de ronda detectado por el jugador
+    if (userRole === 'player' && config.round > currentLocalRound) {
+        currentLocalRound = config.round;
+        if (currentLocalRound <= 4) {
+            alert(`📢 ¡Ronda procesada! Inicia la Ronda ${currentLocalRound}.`);
+            resetPlayerUI();
+        }
+    }
+    if (userRole === 'creator') currentLocalRound = config.round;
+
+    // Badges de ronda
+    const roundText = currentLocalRound <= 4
+        ? `Ronda ${currentLocalRound} / 4`
+        : '¡JUEGO TERMINADO!';
+    const ctrlText  = currentLocalRound <= 4
+        ? `Control de Ronda ${currentLocalRound} / 4`
+        : '¡JUEGO TERMINADO!';
+
+    el('player-round-badge').innerText  = roundText;
+    el('creator-round-badge').innerText = ctrlText;
+
+    // Dashboard
+    el('coop-rate').innerText = config.coopRate;
+    el('server-status').innerText = config.serverState;
+
+    const ss = el('server-status');
+    ss.style.color = 'var(--muted)';
+    if (config.serverState === 'ESTABLE')              ss.style.color = 'var(--green)';
+    if (config.serverState.includes('⚠️'))             ss.style.color = 'var(--orange)';
+    if (config.serverState.includes('☠️'))             ss.style.color = 'var(--red)';
+
+    // Panel Creador
+    const ready   = ids.filter(id => players[id].votedRound === currentLocalRound).length;
+    const pending = ids.length - ready;
+
+    el('vote-counter').innerText = `Votos listos: ${ready} / ${ids.length}`;
+    el('vote-pending').innerText = `Faltan: ${pending} persona${pending === 1 ? '' : 's'}`;
+
+    const procBtn = el('proc-btn');
+    if (currentLocalRound > 4) {
+        procBtn.disabled = true;
+        procBtn.innerText = 'Simulación Finalizada';
+    } else {
+        procBtn.disabled = false;
+        procBtn.innerText = `⚡ Procesar Ronda ${currentLocalRound} e Ir a la Siguiente`;
+    }
+
+    // Leaderboard
+    const arr = ids.map(id => ({ id, ...players[id] }))
+                   .sort((a,b) => b.score - a.score);
+    const tbody = el('leaderboard-body');
+    tbody.innerHTML = '';
+
+    if (arr.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Esperando que los jugadores abran el link…</td></tr>`;
+    } else {
+        arr.forEach((p, i) => {
+            const posClass = i === 0 ? 'pos top1' : i === 1 ? 'pos top2' : i === 2 ? 'pos top3' : 'pos';
+            const posText  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}°`;
+            const isMine   = p.id === myAssignedId;
+
+            let action = '<td>—</td>';
+            if (p.lastAction === 'Cooperar')   action = `<td class="badge-coop">Invertir 🟢</td>`;
+            if (p.lastAction === 'Traicionar') action = `<td class="badge-betray">Hackear 🔴</td>`;
+
+            tbody.innerHTML += `
+                <tr class="${isMine ? 'my-row' : ''}">
+                    <td><span class="${posClass}">${posText}</span></td>
+                    <td class="code-id">${p.id}${isMine ? ' <span style="color:var(--blue);font-size:.75rem;">(Tú)</span>' : ''}</td>
+                    ${action}
+                    <td class="score-cell">${p.score} <span style="font-size:.72rem; color:var(--muted);">pts</span></td>
+                </tr>`;
+        });
+    }
+
+    el('total-pool').innerText = arr.reduce((s, p) => s + (p.score || 0), 0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROCESAR RONDA (solo Creador)
+// ═══════════════════════════════════════════════════════════════
+function nextRoundMaster() {
+    const { players, config } = globalState;
+    const ids = Object.keys(players);
+
+    if (ids.length === 0) { alert('No hay jugadores conectados.'); return; }
+
+    let coop = 0, betray = 0;
+    ids.forEach(id => {
+        if (players[id].currentVote === 'Traicionar') betray++;
+        else coop++;
+    });
+
+    const rate        = (coop / ids.length) * 100;
+    const coopRateText  = `${rate.toFixed(0)}%`;
+    let   serverState   = 'ESTABLE';
+    if (coop === 0)    serverState = 'COLAPSADO ☠️';
+    else if (rate < 75) serverState = 'VULNERADO ⚠️';
+
+    ids.forEach(id => {
+        const p       = players[id];
+        const vote    = p.currentVote === 'Ninguno' ? 'Cooperar' : p.currentVote;
+        let   score   = p.score;
+
+        if      (serverState === 'COLAPSADO ☠️') score -= 60;
+        else if (serverState === 'ESTABLE')      score += vote === 'Cooperar' ? 40 : 100;
+        else                                     score += vote === 'Cooperar' ? -10 : Math.max(0, 110 - betray * 12);
+
+        ROOM.get(id).put(JSON.stringify({
+            score,
+            lastAction:  vote,
+            currentVote: 'Ninguno',
+            votedRound:  currentLocalRound
+        }));
+    });
+
+    ROOM.get('SERVER_CONFIG').put(JSON.stringify({
+        round:       currentLocalRound + 1,
+        coopRate:    coopRateText,
+        serverState: serverState
+    }));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESET TOTAL
+// ═══════════════════════════════════════════════════════════════
+function resetWholeServer() {
+    if (!confirm('🚨 ¿Reiniciar TODA la simulación y borrar los puntajes?')) return;
+
+    ROOM.get('SERVER_CONFIG').put(JSON.stringify(
+        { round: 1, coopRate: '—', serverState: 'ESPERANDO' }
+    ));
+    Object.keys(globalState.players).forEach(id => ROOM.get(id).put(null));
+    setTimeout(() => location.reload(), 1000);
+}
+
+// ─── Helper ───
+function el(id) { return document.getElementById(id); }
+</script>
+</body>
+</html>
